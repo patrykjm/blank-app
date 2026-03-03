@@ -51,7 +51,7 @@ with st.form("recenzja"):
         st.success("Dzięki! Recenzja zapisana 🎉")
         st.balloons()
 
-# === DASHBOARD Z POPRAWIONYM USUWANIEM ===
+# === NAJSTABILNIEJSZA WERSJA USUWANIA ===
 st.divider()
 st.subheader("📜 Historia Twoich recenzji")
 
@@ -64,49 +64,30 @@ df = pd.read_sql_query("""
 if df.empty:
     st.info("Jeszcze nie masz żadnych recenzji. Dodaj pierwszą powyżej! 🍔")
 else:
-    # Przygotowujemy tabelę do edycji
-    df_display = df.copy()
-    df_display['🗑 Usuń?'] = False
+    for _, row in df.iterrows():
+        with st.container(border=True):   # ładna ramka wokół każdej recenzji
+            col1, col2 = st.columns([6, 1])
+            
+            with col1:
+                st.markdown(f"**{row['data'][:16]}** — **{row['restauracja']}**")
+                st.write(f"Smakowało: **{'✅ Tak' if row['smak'] else '❌ Nie'}** | "
+                         f"Duża porcja: **{'✅ Tak' if row['porcja'] else '❌ Nie'}** | "
+                         f"Cena OK: **{'✅ Tak' if row['cena_ok'] else '❌ Nie'}**")
+                st.write(f"Obsługa: **{'✅ Tak' if row['obsluga'] else '❌ Nie'}** | "
+                         f"Czystość: **{'✅ Tak' if row['czystosc'] else '❌ Nie'}**")
+                if row['komentarz']:
+                    st.caption(f"Komentarz: {row['komentarz']}")
+            
+            with col2:
+                if st.button("🗑 Usuń", key=f"delete_{row['id']}", type="secondary"):
+                    try:
+                        conn.execute("DELETE FROM recenzje WHERE id = ?", (row['id'],))
+                        conn.commit()
+                        st.success(f"Usunięto recenzję z {row['data'][:10]}!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Błąd: {e}")
+                        conn.rollback()
 
-    edited_df = st.data_editor(
-        df_display,
-        column_config={
-            "id": st.column_config.NumberColumn("ID", disabled=True),
-            "data": st.column_config.DatetimeColumn("Data", disabled=True, format="DD.MM.YYYY HH:mm"),
-            "restauracja": st.column_config.TextColumn("Lokal", disabled=True),
-            "smak": st.column_config.CheckboxColumn("Smakowało?", disabled=True),
-            "porcja": st.column_config.CheckboxColumn("Duża porcja?", disabled=True),
-            "cena_ok": st.column_config.CheckboxColumn("Cena OK?", disabled=True),
-            "obsluga": st.column_config.CheckboxColumn("Obsługa OK?", disabled=True),
-            "czystosc": st.column_config.CheckboxColumn("Czysto?", disabled=True),
-            "komentarz": st.column_config.TextColumn("Komentarz", disabled=True),
-            "🗑 Usuń?": st.column_config.CheckboxColumn("Zaznacz do usunięcia", default=False),
-        },
-        hide_index=True,
-        use_container_width=True,
-    )
-
-    # === USUWANIE Z PEŁNYM COMMITEM ===
-    if st.button("🗑 Usuń zaznaczone recenzje", type="primary"):
-        ids_to_delete = edited_df[edited_df['🗑 Usuń?'] == True]['id'].tolist()
-        
-        if not ids_to_delete:
-            st.warning("Nic nie zaznaczyłeś.")
-        else:
-            st.warning(f"Chcesz trwale usunąć **{len(ids_to_delete)}** recenzji?")
-            col1, col2 = st.columns([1, 3])
-            if col1.button("✅ Tak, usuń na zawsze", type="primary"):
-                try:
-                    with st.spinner("Usuwam..."):
-                        # Jedno zapytanie zamiast pętli + gwarantowany commit
-                        placeholders = ','.join(['?'] * len(ids_to_delete))
-                        conn.execute(f"DELETE FROM recenzje WHERE id IN ({placeholders})", ids_to_delete)
-                        conn.commit()                     # ← TO BYŁO KLUCZOWE
-                        
-                    st.success(f"✅ Usunięto {len(ids_to_delete)} recenzji!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Błąd podczas usuwania: {e}")
-                    conn.rollback()   # cofa w razie błędu
-            if col2.button("❌ Anuluj"):
-                st.info("Anulowano.")
+    # Dodatkowa statystyka na dole
+    st.caption(f"Łącznie recenzji: **{len(df)}**")
