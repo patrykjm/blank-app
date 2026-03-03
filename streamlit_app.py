@@ -51,10 +51,68 @@ with st.form("recenzja"):
         st.success("Dzięki! Recenzja zapisana 🎉")
         st.balloons()
 
-# Dashboard (widoczny tylko dla Ciebie / admina)
-st.subheader("📊 Twoje recenzje")
-df = pd.read_sql("SELECT * FROM recenzje ORDER BY data DESC", conn)
-st.dataframe(df, use_container_width=True)
+# === DASHBOARD Z OPCJĄ USUWANIA ===
+st.divider()
+st.subheader("📜 Historia Twoich recenzji")
+
+# Pobieramy dane z kolumną ID (potrzebne do usuwania)
+df = pd.read_sql_query("""
+    SELECT id, data, restauracja, smak, porcja, cena_ok, obsluga, czystosc, komentarz 
+    FROM recenzje 
+    ORDER BY data DESC
+""", conn)
+
+if df.empty:
+    st.info("Jeszcze nie masz żadnych recenzji. Dodaj pierwszą powyżej! 🍔")
+else:
+    # Dodajemy kolumnę checkbox do zaznaczania
+    df_display = df.copy()
+    df_display['🗑 Usuń?'] = False   # nowa kolumna z checkboxami
+
+    # Edytowalna tabela (można zaznaczać wiele wpisów naraz)
+    edited_df = st.data_editor(
+        df_display,
+        column_config={
+            "id": st.column_config.NumberColumn("ID", disabled=True),
+            "data": st.column_config.TextColumn("Data", disabled=True),
+            "restauracja": st.column_config.TextColumn("Lokal", disabled=True),
+            "smak": st.column_config.CheckboxColumn("Smakowało?", disabled=True),
+            "porcja": st.column_config.CheckboxColumn("Duża porcja?", disabled=True),
+            "cena_ok": st.column_config.CheckboxColumn("Cena OK?", disabled=True),
+            "obsluga": st.column_config.CheckboxColumn("Obsługa OK?", disabled=True),
+            "czystosc": st.column_config.CheckboxColumn("Czysto?", disabled=True),
+            "komentarz": st.column_config.TextColumn("Komentarz", disabled=True),
+            "🗑 Usuń?": st.column_config.CheckboxColumn(
+                "Zaznacz do usunięcia",
+                help="Zaznacz recenzje, które chcesz usunąć",
+                default=False,
+            ),
+        },
+        hide_index=True,
+        use_container_width=True,
+        num_rows="fixed",
+    )
+
+    # Przycisk usuwania z potwierdzeniem
+    if st.button("🗑 Usuń zaznaczone recenzje", type="primary"):
+        # Pobieramy ID zaznaczonych wierszy
+        ids_to_delete = edited_df[edited_df['🗑 Usuń?'] == True]['id'].tolist()
+        
+        if not ids_to_delete:
+            st.warning("Nie zaznaczyłeś żadnej recenzji do usunięcia.")
+        else:
+            # Potwierdzenie
+            st.warning(f"Na pewno chcesz usunąć **{len(ids_to_delete)}** recenzji? Tej operacji nie da się cofnąć!")
+            col_yes, col_no = st.columns(2)
+            if col_yes.button("Tak, usuń na zawsze", type="primary"):
+                with st.spinner("Usuwam..."):
+                    for rec_id in ids_to_delete:
+                        conn.execute("DELETE FROM recenzje WHERE id = ?", (rec_id,))
+                    conn.commit()
+                st.success(f"Usunięto {len(ids_to_delete)} recenzji!")
+                st.rerun()   # odświeża stronę automatycznie
+            if col_no.button("Nie, anuluj"):
+                st.info("Usuwanie anulowane.")
 
 # Proste statystyki
 if not df.empty:
