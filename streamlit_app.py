@@ -5,11 +5,15 @@ import bcrypt
 from datetime import datetime, timedelta
 
 # ================== HASŁO (ZAHASHOWANE) ==================
-# ←←← Wklej tutaj cały hash z bcrypt-generator.com
-PASSWORD_HASH = b'$2b$12$$2a$12$FIF6xjXSRIsDsmj4AFzHqOPRWqNOyXAmlZXk6KDY/WHiB4CgvQUui$...'
+# ================== HASŁO (naprawione) ==================
+# Wklej tutaj swój hash jako zwykły tekst (bez b' na początku!)
+RAW_HASH = "$2a$12$FIF6xjXSRIsDsmj4AFzHqOPRWqNOyXAmlZXk6KDY/WHiB4CgvQUui"  
+
+# Automatycznie zamieniamy na bytes (to rozwiązuje błąd)
+PASSWORD_HASH = RAW_HASH.encode("utf-8")
 
 # ================== LOGOWANIE ==================
-if 'logged_in' not in st.session_state:
+if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
@@ -19,13 +23,18 @@ if not st.session_state.logged_in:
     password = st.text_input("Hasło", type="password", placeholder="Wpisz hasło...")
 
     if st.button("🔑 Zaloguj się", type="primary", use_container_width=True):
-        if bcrypt.checkpw(password.encode('utf-8'), PASSWORD_HASH):
-            st.session_state.logged_in = True
-            st.success("✅ Zalogowano pomyślnie!")
-            st.rerun()
-        else:
-            st.error("❌ Nieprawidłowe hasło!")
-    st.stop()   # zatrzymuje dalsze wykonywanie
+        try:
+            if bcrypt.checkpw(password.encode("utf-8"), PASSWORD_HASH):
+                st.session_state.logged_in = True
+                st.success("✅ Zalogowano pomyślnie!")
+                st.rerun()
+            else:
+                st.error("❌ Nieprawidłowe hasło!")
+        except Exception as e:
+            st.error(f"Błąd podczas sprawdzania hasła: {e}")
+            st.info("Sprawdź czy RAW_HASH jest poprawnie wklejony (zaczyna się od $2b$12$)")
+
+    st.stop()   # zatrzymuje resztę apki
 
 # ================== GŁÓWNA APLIKACJA (po zalogowaniu) ==================
 st.title("🍔 Mój prywatny dziennik jedzenia")
